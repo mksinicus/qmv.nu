@@ -20,7 +20,7 @@ export def main [
   )
   let renamed = (
     $pristine | to csv -n -s "\t" | vipe |
-    str replace "\t+" "\t" | # remove extra tabs to avoid users' blunder
+    str replace -r "\t+" "\t" | # remove extra tabs to avoid users' blunder
     from csv -n -s "\t" | rename old new
   )
   assert ($pristine != $renamed) "No filename changed, aborting"
@@ -30,10 +30,14 @@ export def main [
       msg: "Unconfirmed. Aborting."
     }
   } else {
-    $renamed 
-    | filter {|col| $col.old != $col.new } # Remove unchanged
+    # a trick to avoid circular reference
+    # in a pipe it seems to be lazy
+    let new_renamed = $renamed 
+      | filter {|col| $col.old != $col.new } # Remove unchanged
+      | update old {|col| open -r $col.old} 
+    $new_renamed
     | par-each {
-      |x| mv $x.old $x.new
+      |x| $x.old | save -f $x.new
     }
   }
   return null
